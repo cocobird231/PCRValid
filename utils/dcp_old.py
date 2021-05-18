@@ -14,60 +14,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-import argparse
-def DCPparser():
-    parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    parser.add_argument('--model', type=str, default='icp', metavar='N',
-                        choices=['dcp', 'icp'],
-                        help='Model to use, [dcp]')
-    parser.add_argument('--emb_nn', type=str, default='pointnet', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
-                        help='Embedding nn to use, [pointnet, dgcnn]')
-    parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
-                        choices=['identity', 'transformer'],
-                        help='Attention-based pointer generator to use, [identity, transformer]')
-    parser.add_argument('--head', type=str, default='svd', metavar='N',
-                        choices=['mlp', 'svd', ],
-                        help='Head to use, [mlp, svd]')
-    parser.add_argument('--emb_dims', type=int, default=512, metavar='N',
-                        help='Dimension of embeddings')
-    parser.add_argument('--n_blocks', type=int, default=1, metavar='N',
-                        help='Num of blocks of encoder&decoder')
-    parser.add_argument('--n_heads', type=int, default=4, metavar='N',
-                        help='Num of heads in multiheadedattention')
-    parser.add_argument('--ff_dims', type=int, default=1024, metavar='N',
-                        help='Num of dimensions of fc in transformer')
-    parser.add_argument('--dropout', type=float, default=0.1, metavar='N',
-                        help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=1, metavar='batch_size',
-                        help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=1, metavar='batch_size',
-                        help='Size of batch)')
-    parser.add_argument('--epochs', type=int, default=250, metavar='N',
-                        help='number of episode to train ')
-    parser.add_argument('--use_sgd', action='store_true', default=False,
-                        help='Use SGD')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
-                        help='learning rate (default: 0.001, 0.1 if using sgd)')
-    parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                        help='SGD momentum (default: 0.9)')
-    parser.add_argument('--cudaF', action='store_true', default=False,
-                        help='enables CUDA training')
-    parser.add_argument('--seed', type=int, default=1234, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--eval', action='store_true', default=True,
-                        help='evaluate the model')
-    parser.add_argument('--cycle', type=bool, default=False, metavar='N',
-                        help='Whether to use cycle consistency')
-    parser.add_argument('--num_points', type=int, default=512, metavar='N',
-                        help='Num of points to use')
-    parser.add_argument('--factor', type=float, default=4, metavar='N',
-                        help='Divided factor for rotations')
-    parser.add_argument('--model_path', type=str, default='model/PN_V_E1000_D2.t7', metavar='N',
-                        help='Pretrained model path')
-    return parser.parse_args()
-
-
+class DCPProp:
+    def __init__(self, 
+                 emb_dims : int = 512, 
+                 emb_nn : str = 'dgcnn', 
+                 pointer : str = 'transformer', 
+                 head : str = 'svd', 
+                 cycle : bool = False, 
+                 dropout : float = 0.1, 
+                 ff_dims = 1024, 
+                 cuda = False):
+        assert emb_nn == 'dgcnn' or emb_nn == 'pointnet'
+        assert pointer == 'transformer' or pointer == 'identity'
+        assert head == 'svd' or head == 'mlp'
+        self.emb_nn = emb_nn
+        self.emb_dims = emb_dims
+        self.pointer = pointer
+        self.head = head
+        self.cycle = cycle
+        self.dropout = dropout
+        # Transformer
+        self.ff_dims = ff_dims
+        
+        self.cuda = cuda
 # Part of the code is referred from: http://nlp.seas.harvard.edu/2018/04/03/attention.html#positional-encoding
 
 def clones(module, N):
@@ -331,7 +300,7 @@ class PointNet(nn.Module):
 
 
 class DGCNN(nn.Module):
-    def __init__(self, args, emb_dims=512):
+    def __init__(self, emb_dims=512, cudaF = False):
         super(DGCNN, self).__init__()
         self.conv1 = nn.Conv2d(6, 64, kernel_size=1, bias=False)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=1, bias=False)
@@ -343,7 +312,7 @@ class DGCNN(nn.Module):
         self.bn3 = nn.BatchNorm2d(128)
         self.bn4 = nn.BatchNorm2d(256)
         self.bn5 = nn.BatchNorm2d(emb_dims)
-        self.cudaF = args.cudaF
+        self.cudaF = cudaF
 
     def forward(self, x):
         batch_size, num_dims, num_points = x.size()
@@ -367,9 +336,9 @@ class DGCNN(nn.Module):
 
 
 class MLPHead(nn.Module):
-    def __init__(self, args):
+    def __init__(self, prop):
         super(MLPHead, self).__init__()
-        emb_dims = args.emb_dims
+        emb_dims = prop.emb_dims
         self.emb_dims = emb_dims
         self.nn = nn.Sequential(nn.Linear(emb_dims * 2, emb_dims // 2),
                                 nn.BatchNorm1d(emb_dims // 2),
@@ -403,13 +372,13 @@ class Identity(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, args):
+    def __init__(self, prop):
         super(Transformer, self).__init__()
-        self.emb_dims = args.emb_dims
-        self.N = args.n_blocks
-        self.dropout = args.dropout
-        self.ff_dims = args.ff_dims
-        self.n_heads = args.n_heads
+        self.emb_dims = prop.emb_dims
+        self.N = 1
+        self.dropout = prop.dropout
+        self.ff_dims = prop.ff_dims
+        self.n_heads = 4
         c = copy.deepcopy
         attn = MultiHeadedAttention(self.n_heads, self.emb_dims)
         ff = PositionwiseFeedForward(self.emb_dims, self.ff_dims, self.dropout)
@@ -430,9 +399,9 @@ class Transformer(nn.Module):
 
 
 class SVDHead(nn.Module):
-    def __init__(self, args):
+    def __init__(self, prop):
         super(SVDHead, self).__init__()
-        self.emb_dims = args.emb_dims
+        self.emb_dims = prop.emb_dims
         self.reflect = nn.Parameter(torch.eye(3), requires_grad=False)
         self.reflect[2, 2] = -1
 
@@ -483,28 +452,28 @@ class SVDHead(nn.Module):
 
 
 class DCP(nn.Module):
-    def __init__(self, args):
+    def __init__(self, prop):
         super(DCP, self).__init__()
-        self.emb_dims = args.emb_dims
-        self.cycle = args.cycle
-        if args.emb_nn == 'pointnet':
+        self.emb_dims = prop.emb_dims
+        self.cycle = prop.cycle
+        if prop.emb_nn == 'pointnet':
             self.emb_nn = PointNet(emb_dims=self.emb_dims)
-        elif args.emb_nn == 'dgcnn':
-            self.emb_nn = DGCNN(args, emb_dims=self.emb_dims)
+        elif prop.emb_nn == 'dgcnn':
+            self.emb_nn = DGCNN(emb_dims=self.emb_dims, cudaF = prop.cuda)
         else:
             raise Exception('Not implemented')
 
-        if args.pointer == 'identity':
+        if prop.pointer == 'identity':
             self.pointer = Identity()
-        elif args.pointer == 'transformer':
-            self.pointer = Transformer(args=args)
+        elif prop.pointer == 'transformer':
+            self.pointer = Transformer(prop)
         else:
             raise Exception("Not implemented")
 
-        if args.head == 'mlp':
-            self.head = MLPHead(args=args)
-        elif args.head == 'svd':
-            self.head = SVDHead(args=args)
+        if prop.head == 'mlp':
+            self.head = MLPHead(prop)
+        elif prop.head == 'svd':
+            self.head = SVDHead(prop)
         else:
             raise Exception('Not implemented')
 
