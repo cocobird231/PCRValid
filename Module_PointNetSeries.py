@@ -272,7 +272,7 @@ class DGCNN(nn.Module):
 import os
 import sys
 sys.path.append(os.path.join('/home/wei/Desktop/votenet2', 'pointnet2'))
-# from pointnet2_modules import PointnetSAModule
+from pointnet2_modules import PointnetSAModule
 
 class PointNet2Comp(nn.Module):
     def __init__(self, input_feat_dim = 0, k = 40):

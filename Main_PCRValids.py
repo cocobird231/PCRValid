@@ -18,7 +18,7 @@ from Module_DCP import Identity
 from Module_PointNetLK import PointLK
 from Module_PointNetSeries import PointNet2Feat
 from utils.pointnet import PointNet_features# Remove while re-train
-from utils.dcp_old import DCP, DCPparser# Remove while re-train
+from utils.dcp_old import DCP, DCPProp# Remove while re-train
 from Module_ModelNet40Series_DataLoader import RegistrationValidDataset
 
 import argparse
@@ -184,7 +184,7 @@ if (__name__ == '__main__'):
         net.load_state_dict(torch.load(args.modelPath2, map_location='cpu'))
         net.to(device)
     elif (args.model == 'dcp'):
-        net = DCP(DCPparser())
+        net = DCP(DCPProp())
         net.load_state_dict(torch.load(args.modelPath, map_location='cpu'))
         net.to(device)
     elif (args.model == 'icp'):
