@@ -6,8 +6,10 @@ Created on Wed May 19 00:38:29 2021
 """
 
 import copy
+import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from Module_PointNetSeries import DGCNNFeat, PointNetFeat
 
@@ -15,7 +17,7 @@ from Module_PointNetSeries import DGCNNFeat, PointNetFeat
 class DCPProp:
     def __init__(self, 
                  emb_dims : int = 512, 
-                 emb_nn : str = 'dgcnn', 
+                 emb_nn : str = 'pointnet', 
                  pointer : str = 'transformer', 
                  head : str = 'svd', 
                  cycle : bool = False, 
@@ -388,14 +390,6 @@ class DCP(nn.Module):
             rotation_ba = rotation_ab.transpose(2, 1).contiguous()
             translation_ba = -torch.matmul(rotation_ba, translation_ab.unsqueeze(2)).squeeze(2)
         return rotation_ab, translation_ab, rotation_ba, translation_ba
-
-
-class Identity(nn.Module):
-    def __init__(self):
-        super(Identity, self).__init__()
-
-    def forward(self, *input):
-        return input
 
 
 if (__name__ == '__main__'):
