@@ -63,7 +63,7 @@ def initEnv(args):
         raise 'Unexpected error'
 
 
-def RunValidation(net, testLoader, args):
+def RunValidation(net, testLoader, textLog, args):
     net.eval()
     avgAngRMSE = 0
     ranks = [0 for i in range(5)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30
@@ -161,8 +161,8 @@ def RunValidation(net, testLoader, args):
         print('.')
     cnt = 0
     for i in ranks : cnt += i
-    print('Average Angle Error: %f' %(avgAngRMSE / cnt))
-    for i, rk in enumerate(ranks) : print('rank[%d]: %d' %(i, rk))
+    textLog.writeLog('Average Angle Error: %f' %(avgAngRMSE / cnt))
+    for i, rk in enumerate(ranks) : textLog.writeLog('rank[%d]: %d' %(i, rk))
 
 if (__name__ == '__main__'):
     args = getParser()
@@ -190,5 +190,5 @@ if (__name__ == '__main__'):
     elif (args.model == 'icp'):
         net = Identity()
     testLoader = RegistrationValidDataset(args.dataset)
-    RunValidation(net, testLoader, args)
+    RunValidation(net, testLoader, textLog, args)
     textLog.close()
