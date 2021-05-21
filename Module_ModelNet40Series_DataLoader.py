@@ -20,6 +20,7 @@ ModelNet40H5ReturnTypeList = ['cls', 'glob2', 'triplet', 'lk']
 
 def GetModelNet40H5ReturnType(args):
     if (args.L1Loss or args.L2Loss) : return 'glob2'
+    elif (args.modelType == 'pointnetComp' or args.modelType == 'pointnet2Comp' ) : return 'glob2'
     elif (args.tripletMg) : return 'triplet'
     else : return 'cls'
 
