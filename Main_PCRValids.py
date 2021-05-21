@@ -158,7 +158,7 @@ def RunValidation(net, testLoader, textLog, args):
             ranks[3] += 1
         if (AngRMSE <= 30):
             ranks[4] += 1
-        print('.')
+        print('.', end = '')
     cnt = 0
     for i in ranks : cnt += i
     textLog.writeLog('Average Angle Error: %f' %(avgAngRMSE / cnt))
