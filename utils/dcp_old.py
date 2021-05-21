@@ -17,7 +17,7 @@ from torch.autograd import Variable
 class DCPProp:
     def __init__(self, 
                  emb_dims : int = 512, 
-                 emb_nn : str = 'dgcnn', 
+                 emb_nn : str = 'pointnet', 
                  pointer : str = 'transformer', 
                  head : str = 'svd', 
                  cycle : bool = False, 
