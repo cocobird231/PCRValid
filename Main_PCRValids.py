@@ -77,6 +77,10 @@ def RunValidation(net, testLoader, textLog, args):
     
     sT = time.clock()
     for tmpPCD, tarPCD, rotMat, transVec in testLoader:
+        
+        ICP_PC.points = o3d.utility.Vector3dVector(tmpPCD)
+        tempPC.points = o3d.utility.Vector3dVector(tarPCD)
+        
         tmpPCD = torch.tensor(tmpPCD).unsqueeze(0)
         tarPCD = torch.tensor(tarPCD).unsqueeze(0)
         if (args.cuda) : tmpPCD = tmpPCD.cuda()
@@ -104,6 +108,7 @@ def RunValidation(net, testLoader, textLog, args):
             outTransMat = invTransform
             outAng = invAng
             
+            
         elif (args.model == 'dcp'):
             rot_ab_pred, trans_ab_pred, _, _ = net(tmpPCD, tarPCD)
             if (args.cuda) : rot_ab_pred = rot_ab_pred.cpu()
@@ -114,10 +119,26 @@ def RunValidation(net, testLoader, textLog, args):
             outTransMat = np.block([[outRot, outTrans.reshape(3, -1)], [np.eye(4)[-1]]])
             outAng = R.from_matrix(outRot).as_euler('xyz', True)
             
+            
+        elif (args.model == 'fgr'):
+            ICP_PC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
+                        ICP_PC, o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            tempPC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
+                        tempPC, o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            FGR = o3d.pipelines.registration.registration_fast_based_on_feature_matching(
+                        copy.deepcopy(ICP_PC), copy.deepcopy(tempPC), ICP_PC_FPFH, tempPC_FPFH)
+            FGR_TRANSFORM = FGR.transformation
+            
+            outRot = FGR_TRANSFORM[:3, :3]
+            outTrans = FGR_TRANSFORM[:3, 3]
+            outTransMat = FGR_TRANSFORM
+            outAng = R.from_matrix(outRot).as_euler('xyz', True)
+            
+            
         if (args.model == 'icp' or args.iter):
             assert (args.iter != None), 'ICP method must assign --iter value'
-            ICP_PC.points = o3d.utility.Vector3dVector(tmpPCD)
-            tempPC.points = o3d.utility.Vector3dVector(tarPCD)
+            ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             ICP_TRANSFORM = ICPIter(ICP_PC, tempPC, outTransMat, args.iter)
             ICP_TRANSFORM = ICP_TRANSFORM.transformation
             
@@ -204,6 +225,8 @@ if (__name__ == '__main__'):
         net = DCP(DCPProp())
         net.load_state_dict(torch.load(args.modelPath, map_location='cpu'))
         net.to(device)
+    elif (args.model == 'fgr'):
+        net = Identity()
     elif (args.model == 'icp'):
         net = Identity()
     testLoader = RegistrationValidDataset(args.dataset)
