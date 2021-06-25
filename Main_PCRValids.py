@@ -23,7 +23,7 @@ from Module_ModelNet40Series_DataLoader import RegistrationValidDataset
 
 import argparse
 
-modelList = ['pointnetlk', 'pointnetlk2', 'dcp', 'icp']
+modelList = ['pointnetlk', 'pointnetlk2', 'dcp', 'fgr', 'icp']
 
 def getParser():
     parser = argparse.ArgumentParser(description='PCRValidation')
@@ -121,6 +121,8 @@ def RunValidation(net, testLoader, textLog, args):
             
             
         elif (args.model == 'fgr'):
+            ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             ICP_PC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
                         ICP_PC, o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             tempPC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
@@ -137,8 +139,8 @@ def RunValidation(net, testLoader, textLog, args):
             
         if (args.model == 'icp' or args.iter):
             assert (args.iter != None), 'ICP method must assign --iter value'
-            ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
-            tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            if (not ICP_PC.has_normals) : ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            if (not tempPC.has_normals) : tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             ICP_TRANSFORM = ICPIter(ICP_PC, tempPC, outTransMat, args.iter)
             ICP_TRANSFORM = ICP_TRANSFORM.transformation
             
