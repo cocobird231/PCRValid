@@ -35,6 +35,8 @@ def getParser():
                         metavar='PATH', help='Model path (feat)')
     parser.add_argument('-q', '--modelPath2', default='models/PointNetLK/pointlk_model_best.pth', required=False, type=str, 
                         metavar='PATH', help='Model path (lk)')
+    parser.add_argument('-i', '--iter', type=int, 
+                        default=None, help='ICP iteration times')
     parser.add_argument('-l', '--saveLogDir', default='result', required=False, type=str, 
                         metavar='PATH', help='Log saving path')
     parser.add_argument('--logName', default=None, type=str, metavar='NAME', help='Log file name (default: model name)')
@@ -65,13 +67,26 @@ def initEnv(args):
 
 def RunValidation(net, testLoader, textLog, args):
     net.eval()
+    avgAngMAE = 0
     avgAngRMSE = 0
     ranks = [0 for i in range(5)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30
+    
+    # Init ICP method
+    ICP_PC = o3d.geometry.PointCloud()
+    tempPC = o3d.geometry.PointCloud()
+    
+    sT = time.clock()
     for tmpPCD, tarPCD, rotMat, transVec in testLoader:
         tmpPCD = torch.tensor(tmpPCD).unsqueeze(0)
         tarPCD = torch.tensor(tarPCD).unsqueeze(0)
         if (args.cuda) : tmpPCD = tmpPCD.cuda()
         if (args.cuda) : tarPCD = tarPCD.cuda()
+        
+        ## Init output Rigid
+        outRot = np.eye(3)
+        outTrans = np.asarray([0, 0, 0])
+        outTransMat = np.eye(4)
+        outAng = np.asarray([0, 0, 0])
         
         if (args.model == 'pointnetlk' or args.model == 'pointnetlk2'):
             _ = PointLK.do_forward(net, tmpPCD, tarPCD, maxiter=20)
@@ -99,12 +114,11 @@ def RunValidation(net, testLoader, textLog, args):
             outTransMat = np.block([[outRot, outTrans.reshape(3, -1)], [np.eye(4)[-1]]])
             outAng = R.from_matrix(outRot).as_euler('xyz', True)
             
-        elif (args.model == 'icp'):
-            ICP_PC = o3d.geometry.PointCloud()
+        if (args.model == 'icp' or args.iter):
+            assert (args.iter != None), 'ICP method must assign --iter value'
             ICP_PC.points = o3d.utility.Vector3dVector(tmpPCD)
-            tempPC = o3d.geometry.PointCloud()
             tempPC.points = o3d.utility.Vector3dVector(tarPCD)
-            ICP_TRANSFORM = ICPIter(ICP_PC, tempPC, np.eye(4), 50)
+            ICP_TRANSFORM = ICPIter(ICP_PC, tempPC, outTransMat, args.iter)
             ICP_TRANSFORM = ICP_TRANSFORM.transformation
             
             outRot = ICP_TRANSFORM[:3, :3]
@@ -144,8 +158,9 @@ def RunValidation(net, testLoader, textLog, args):
         # o3d.visualization.draw_geometries([pcd2, pcd3, pcd4], window_name = 'Result')
         
         # Rank evaluation
-        angDiff = np.abs(outAng - gtAng)
-        AngRMSE = np.sqrt(np.mean(angDiff) ** 2)
+        AngMAE = np.mean(np.abs(outAng - gtAng))
+        avgAngMAE += AngMAE
+        AngRMSE = np.sqrt(np.mean(np.square(outAng - gtAng)))
         avgAngRMSE += AngRMSE
         
         if (AngRMSE <= 1):
@@ -158,10 +173,12 @@ def RunValidation(net, testLoader, textLog, args):
             ranks[3] += 1
         if (AngRMSE <= 30):
             ranks[4] += 1
-        print('.', end = '')
+        
+    textLog.writeLog('Total use {} sec'.format(time.clock() - sT))
     cnt = 0
     for i in ranks : cnt += i
-    textLog.writeLog('Average Angle Error: %f' %(avgAngRMSE / cnt))
+    textLog.writeLog('Average Angle MAE: %f' %(avgAngMAE / cnt))
+    textLog.writeLog('Average Angle RMSE: %f' %(avgAngRMSE / cnt))
     for i, rk in enumerate(ranks) : textLog.writeLog('rank[%d]: %d' %(i, rk))
 
 if (__name__ == '__main__'):
