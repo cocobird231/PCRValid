@@ -69,7 +69,9 @@ def RunValidation(net, testLoader, textLog, args):
     net.eval()
     avgAngMAE = 0
     avgAngRMSE = 0
-    ranks = [0 for i in range(5)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30
+    avgTransMAE = 0
+    avgTransRMSE = 0
+    ranks = [0 for i in range(6)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30, [5]: out
     
     ICP_PC = o3d.geometry.PointCloud()
     tempPC = o3d.geometry.PointCloud()
@@ -149,7 +151,6 @@ def RunValidation(net, testLoader, textLog, args):
         
         gtAng = R.from_matrix(rotMat).as_euler('xyz', True)
         
-        
         # print('GT Ang  :', gtAng)
         # print('Pred Ang:', outAng)
         # print('GT Trans  :', transVec)
@@ -184,22 +185,23 @@ def RunValidation(net, testLoader, textLog, args):
         AngRMSE = np.sqrt(np.mean(np.square(outAng - gtAng)))
         avgAngRMSE += AngRMSE
         
-        if (AngRMSE <= 1):
-            ranks[0] += 1
-        if (AngRMSE <= 5):
-            ranks[1] += 1
-        if (AngRMSE <= 10):
-            ranks[2] += 1
-        if (AngRMSE <= 20):
-            ranks[3] += 1
-        if (AngRMSE <= 30):
-            ranks[4] += 1
+        avgTransMAE += np.mean(np.abs(outTrans - transVec))
+        avgTransRMSE += np.sqrt(np.mean(np.square(outTrans - transVec)))
+        
+        if (AngRMSE <= 1) : ranks[0] += 1
+        if (AngRMSE <= 5) : ranks[1] += 1
+        if (AngRMSE <= 10) : ranks[2] += 1
+        if (AngRMSE <= 20) : ranks[3] += 1
+        if (AngRMSE <= 30) : ranks[4] += 1
+        if (AngRMSE > 30) : ranks[5] += 1
         
     textLog.writeLog('Total use {} sec'.format(time.clock() - sT))
     cnt = 0
     for i in ranks : cnt += i
     textLog.writeLog('Average Angle MAE: %f' %(avgAngMAE / cnt))
     textLog.writeLog('Average Angle RMSE: %f' %(avgAngRMSE / cnt))
+    textLog.writeLog('Average Trans MAE: %f' %(avgTransMAE / cnt))
+    textLog.writeLog('Average Trans RMSE: %f' %(avgTransRMSE / cnt))
     for i, rk in enumerate(ranks) : textLog.writeLog('rank[%d]: %d' %(i, rk))
 
 if (__name__ == '__main__'):
