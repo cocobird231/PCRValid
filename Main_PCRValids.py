@@ -71,8 +71,7 @@ def RunValidation(net, testLoader, textLog, args):
     avgAngRMSE = 0
     avgTransMAE = 0
     avgTransRMSE = 0
-    ranks = [0 for i in range(6)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30, [5]: out
-    
+    totalRankDict = {'Rank 1' : 0, 'Rank 5' : 0, 'Rank 10' : 0, 'Rank 20' : 0, 'Rank 30' : 0, 'Out of Rank' : 0}
     ICP_PC = o3d.geometry.PointCloud()
     tempPC = o3d.geometry.PointCloud()
     
@@ -188,21 +187,21 @@ def RunValidation(net, testLoader, textLog, args):
         avgTransMAE += np.mean(np.abs(outTrans - transVec))
         avgTransRMSE += np.sqrt(np.mean(np.square(outTrans - transVec)))
         
-        if (AngRMSE <= 1) : ranks[0] += 1
-        if (AngRMSE <= 5) : ranks[1] += 1
-        if (AngRMSE <= 10) : ranks[2] += 1
-        if (AngRMSE <= 20) : ranks[3] += 1
-        if (AngRMSE <= 30) : ranks[4] += 1
-        if (AngRMSE > 30) : ranks[5] += 1
+        if (AngRMSE <= 1) : totalRankDict['Rank 1'] += 1
+        if (AngRMSE <= 5) : totalRankDict['Rank 5'] += 1
+        if (AngRMSE <= 10) : totalRankDict['Rank 10'] += 1
+        if (AngRMSE <= 20) : totalRankDict['Rank 20'] += 1
+        if (AngRMSE <= 30) : totalRankDict['Rank 30'] += 1
+        if (AngRMSE > 30) : totalRankDict['Out of Rank'] += 1
         
     textLog.writeLog('Total use {} sec'.format(time.clock() - sT))
     cnt = 0
-    for i in ranks : cnt += i
+    for key in totalRankDict : cnt += totalRankDict[key]
     textLog.writeLog('Average Angle MAE: %f' %(avgAngMAE / cnt))
     textLog.writeLog('Average Angle RMSE: %f' %(avgAngRMSE / cnt))
     textLog.writeLog('Average Trans MAE: %f' %(avgTransMAE / cnt))
     textLog.writeLog('Average Trans RMSE: %f' %(avgTransRMSE / cnt))
-    for i, rk in enumerate(ranks) : textLog.writeLog('rank[%d]: %d' %(i, rk))
+    textLog.writeLog('{}'.format(totalRankDict))
 
 if (__name__ == '__main__'):
     args = getParser()
