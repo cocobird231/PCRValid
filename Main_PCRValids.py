@@ -71,15 +71,17 @@ def RunValidation(net, testLoader, textLog, args):
     avgAngRMSE = 0
     ranks = [0 for i in range(5)]# [0]: err<1, [1]: err<5, [2]: err<10, [3]: err<20, [4]: err<30
     
-    # Init ICP method
     ICP_PC = o3d.geometry.PointCloud()
     tempPC = o3d.geometry.PointCloud()
     
     sT = time.clock()
     for tmpPCD, tarPCD, rotMat, transVec in testLoader:
-        
-        ICP_PC.points = o3d.utility.Vector3dVector(tmpPCD)
-        tempPC.points = o3d.utility.Vector3dVector(tarPCD)
+        # Init point cloud normals
+        if (args.iter or args.model == 'fgr'):
+            ICP_PC.points = o3d.utility.Vector3dVector(tmpPCD)
+            tempPC.points = o3d.utility.Vector3dVector(tarPCD)
+            ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
+            tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
         
         tmpPCD = torch.tensor(tmpPCD).unsqueeze(0)
         tarPCD = torch.tensor(tarPCD).unsqueeze(0)
@@ -121,8 +123,6 @@ def RunValidation(net, testLoader, textLog, args):
             
             
         elif (args.model == 'fgr'):
-            ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
-            tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             ICP_PC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
                         ICP_PC, o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             tempPC_FPFH = o3d.pipelines.registration.compute_fpfh_feature(
@@ -139,8 +139,6 @@ def RunValidation(net, testLoader, textLog, args):
             
         if (args.model == 'icp' or args.iter):
             assert (args.iter != None), 'ICP method must assign --iter value'
-            if (not ICP_PC.has_normals) : ICP_PC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
-            if (not tempPC.has_normals) : tempPC.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
             ICP_TRANSFORM = ICPIter(ICP_PC, tempPC, outTransMat, args.iter)
             ICP_TRANSFORM = ICP_TRANSFORM.transformation
             
